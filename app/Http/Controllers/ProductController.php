@@ -2,26 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\SupplierCollection;
 use App\Models\IncomingProduct;
 use App\Models\OutcomingProduct;
 use App\Models\Product;
 use App\Models\Supplier;
-use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
     public function quantity()
     {
-        // $a = IncomingProduct::select('incoming_products.coming_at', DB::raw('COUNT(*) AS total'), DB::raw('MONTH(incoming_products.coming_at) AS month'))
-        //     ->join('suppliers', 'suppliers.id', '=', 'incoming_products.supplier_id')
-        //     ->join('incoming_product_details', 'incoming_product_details.incoming_product_id', '=', 'incoming_product_details.id')
-        //     ->join('products', 'products.id', '=', 'incoming_product_details.product_id')
-        //     ->groupBy('month')
-        //     ->get();
-
         $months = IncomingProduct::selectRaw('month(coming_at) month_id, monthname(coming_at) month')->groupBy('month', 'month_id')->get();
 
         foreach ($months as $month) {
@@ -48,16 +37,19 @@ class ProductController extends Controller
 
     public function average()
     {
-        $suppliers = Supplier::all();
+        $suppliers = Supplier::select('id', 'name as supplier_name')->get();
 
-        return new SupplierCollection($suppliers);
-        // $response = [];
-        // foreach($suppliers as $supplier) {
-        //     $products = $supplier->products;
-        //     $item = [
-        //         'id' => $supplier->id,
-        //         'name' => $supplier->name,
-        //     ];
-        // }
+        foreach ($suppliers as $supplier) {
+            $products = Product::selectRaw('avg(incoming_product_details.quantity) as average')
+                ->join('incoming_product_details', 'incoming_product_details.product_id', '=', 'products.id')
+                ->join('incoming_products', 'incoming_products.id', '=', 'incoming_product_details.incoming_product_id')
+                ->join('suppliers', 'incoming_products.supplier_id', '=', 'suppliers.id')
+                ->where('suppliers.id', $supplier->id)
+                ->first();
+
+            $supplier['quantity_per_product_average'] = (double) $products['average'];
+        }
+
+        return response()->json($suppliers);
     }
 }
